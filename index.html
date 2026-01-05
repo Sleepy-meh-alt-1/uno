@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini UNO</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Mini UNO</h1>
+      <div class="status">
+        <span id="turnLabel">Turn: —</span>
+        <span id="message" class="message"></span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="board">
+        <div class="pile">
+          <h2>Discard</h2>
+          <div id="discard" class="card slot"></div>
+        </div>
+
+        <div class="pile">
+          <h2>Deck</h2>
+          <button id="drawBtn" class="btn">Draw</button>
+          <div id="deckCount" class="small"></div>
+        </div>
+      </section>
+
+      <section class="hands">
+        <div class="hand-area">
+          <h2>Opponent</h2>
+          <div id="opponentHand" class="hand"></div>
+        </div>
+
+        <div class="hand-area">
+          <h2>You</h2>
+          <div id="playerHand" class="hand"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer small">
+      Click a card to play it (must match color or number). First to empty hand wins.
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
