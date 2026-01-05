@@ -5,6 +5,13 @@
 // - Simple opponent: plays first valid card else draws
 // - First to empty hand wins
 
+const COLOR_MAP = {
+  red: "#e53935",
+  yellow: "#f9a825", // darker, more readable yellow
+  green: "#43a047",
+  blue: "#1e88e5",
+};
+
 const COLORS = ["red", "yellow", "green", "blue"];
 const NUMBERS = [...Array(10)].map((_, i) => i);
 
@@ -161,7 +168,7 @@ function cardEl(card, { faceDown = false, clickable = false, onClick } = {}) {
   }
 
   // simple color styling
-  el.style.background = card.color;
+  el.style.background = COLOR_MAP[card.color];
   el.textContent = String(card.value);
 
   if (clickable) {
