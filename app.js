@@ -115,40 +115,51 @@ function canPlay(card, top) {
 
 function applyCardEffect(card) {
   const totalPlayers = 1 + state.opponents.length;
-  const step = state.turnDir; // 1 or -1
+  const step = state.turnDir; // +1 or -1
 
-  // +2
+  // +2 (Draw Two)
   if (card.type === "draw2") {
-    const next = (state.turnIndex + step + totalPlayers) % totalPlayers;
+    // victim is next player in current direction
+    const victim = (state.turnIndex + step + totalPlayers) % totalPlayers;
 
-    if (next === 0) {
+    if (victim === 0) {
       state.player.push(drawCard(), drawCard());
     } else {
-      state.opponents[next - 1].push(drawCard(), drawCard());
+      state.opponents[victim - 1].push(drawCard(), drawCard());
     }
 
-    // set turnIndex on the punished player; nextTurn() will move past them
-    state.turnIndex = next;
+    // after punishing, put turnIndex on victim
+    // nextTurn() will advance past them
+    state.turnIndex = victim;
     return;
   }
 
-  // Skip (skip the next player in the current direction)
+  // Skip
   if (card.type === "skip") {
+    // skipped player
     const skipped = (state.turnIndex + step + totalPlayers) % totalPlayers;
-    // put turnIndex on the skipped player; nextTurn() will go past them
+
+    // put turnIndex on skipped; nextTurn() will hop over them
     state.turnIndex = skipped;
     return;
   }
 
-  // Reverse: just flip direction
+  // Reverse
   if (card.type === "reverse") {
-    state.turnDir *= -1;
-    // very simple UNO: just change direction, no extra skip logic
+    if (totalPlayers === 2) {
+      // UNO rule: in 2-player game, reverse = skip
+      const skipped = (state.turnIndex + step + totalPlayers) % totalPlayers;
+      state.turnIndex = skipped;
+    } else {
+      // flip direction
+      state.turnDir *= -1;
+    }
     return;
   }
 
-  // Wilds are handled elsewhere (color choosing / +4 in modal & AI)
+  // Wild effects handled elsewhere
 }
+
 
 function startGame() {
   state.deck = makeDeck();
