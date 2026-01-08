@@ -6,43 +6,87 @@
     <title>Mini UNO</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
+
+  <div id="chooseColorModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h2>Kies een kleur</h2>
+    <div class="color-row">
+      <button data-color="red" class="color-btn" style="background:red"></button>
+      <button data-color="yellow" class="color-btn" style="background:gold"></button>
+      <button data-color="green" class="color-btn" style="background:green"></button>
+      <button data-color="blue" class="color-btn" style="background:blue"></button>
+    </div>
+  </div>
+</div>
+
+
   <body>
     <header class="topbar">
       <h1>Mini UNO</h1>
       <div class="status">
-        <span id="turnLabel">Turn: —</span>
         <span id="message" class="message"></span>
       </div>
     </header>
+<div id="startModal" class="modal-overlay">
+  <div class="modal">
+    <h2>Game Setup</h2>
 
-    <main class="layout">
+    <div class="option-group">
+      <label>
+        <input type="radio" name="mode" value="ai" checked />
+        VS AI
+      </label>
+      <label>
+        <input type="radio" name="mode" value="local" />
+        Local Multiplayer
+      </label>
+    </div>
+
+    <div id="aiOptions" class="option-group">
+      <label>
+        AI Players:
+        <select id="aiCount">
+          <option value="1">1 AI</option>
+          <option value="2">2 AI</option>
+          <option value="3">3 AI</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="modal-actions">
+      <button id="startBtn" class="btn primary">Start</button>
+    </div>
+  </div>
+</div>
+
+  <!-- GAME -->
+  <section id="gameScreen" class="layout hidden">
 
 
-      <section class="hands">
-        <div class="hand-area">
-          <h2>Opponent</h2>
-          <div id="opponentHand" class="hand"></div>
-        </div>
+    <section class="hands">
+      <div id="opponents" class="opponents"></div>
 
-              <section class="board">
-        <div class="pile">
-          <h2>Discard</h2>
-          <div id="discard" class="card slot"></div>
-        </div>
+          <section class="board">
+      <div class="pile">
+        <h2>Discard</h2>
+        <div id="discard" class="card slot"></div>
+      </div>
 
-        <div class="pile">
-          <h2>Deck</h2>
-          <button id="drawBtn" class="btn">Draw</button>
-          <div id="deckCount" class="small"></div>
-        </div>
-      </section>
+      <div class="pile">
+        <h2>Deck</h2>
+        <button id="drawBtn" class="btn">Draw</button>
+        <div id="deckCount" class="small"></div>
+      </div>
+    </section>
 
-        <div class="hand-area">
-          <h2>You</h2>
-          <div id="playerHand" class="hand"></div>
-        </div>
-      </section>
-    </main>
+<div id="playerArea" class="hand-area">
+  <h2>You</h2>
+  <div id="playerHand" class="hand"></div>
+</div>
+
+    </section>
+  </section>
+</main>
 
     <footer class="footer small">
       Click a card to play it (must match color or number). First to empty hand wins.
