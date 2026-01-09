@@ -11,7 +11,9 @@ const AI_THINK_JITTER_MS = 500; // random extra delay
 const gameConfig = {
   mode: "ai",        // "ai" | "local"
   aiCount: 1,        // 1–3
+  localNames: [],    // namen voor hotseat
 };
+
 
 const COLOR_MAP = {
   red: "#e53935",
@@ -33,7 +35,133 @@ const state = {
   aiThinking: false,
   message: "",
   gameOver: false,
+
+  localHands: [],
+  localNames: [],
+  localTurnIndex: 0,
+  localHandRevealed: false,
+  localDir: 1,    // 1 = vooruit, -1 = achteruit in hotseat
 };
+
+
+function applyLocalCardEffect(card) {
+  const totalPlayers = state.localHands.length;
+  if (totalPlayers === 0) return;
+
+  const step = state.localDir || 1;
+
+  // +2 (Draw Two)
+  if (card.type === "draw2") {
+    const victim =
+      (state.localTurnIndex + step + totalPlayers) % totalPlayers;
+
+    state.localHands[victim].push(drawCard(), drawCard());
+
+    // zet beurtindex op de gestrafte; endLocalTurn() gaat daarna door
+    state.localTurnIndex = victim;
+    return;
+  }
+
+  // Skip
+  if (card.type === "skip") {
+    const skipped =
+      (state.localTurnIndex + step + totalPlayers) % totalPlayers;
+    state.localTurnIndex = skipped;
+    return;
+  }
+
+  // Reverse
+  if (card.type === "reverse") {
+    if (totalPlayers === 2) {
+      // bij 2 spelers werkt reverse als skip
+      const skipped =
+        (state.localTurnIndex + step + totalPlayers) % totalPlayers;
+      state.localTurnIndex = skipped;
+    } else {
+      state.localDir = -(state.localDir || 1);
+    }
+    return;
+  }
+
+  // Wilds laten we in hotseat nu alleen kleur veranderen;
+  // wild4-draw kun je later ook op localDir baseren als je dat wilt.
+}
+
+function applyAiCardEffect(card) {
+  const totalPlayers = 1 + state.opponents.length;
+  const step = state.turnDir; // +1 or -1
+
+  // +2 (Draw Two)
+  if (card.type === "draw2") {
+    const victim = (state.turnIndex + step + totalPlayers) % totalPlayers;
+
+    if (victim === 0) {
+      state.player.push(drawCard(), drawCard());
+    } else {
+      state.opponents[victim - 1].push(drawCard(), drawCard());
+    }
+
+    state.turnIndex = victim; // nextTurn() springt eroverheen
+    return;
+  }
+
+  // Skip
+  if (card.type === "skip") {
+    const skipped = (state.turnIndex + step + totalPlayers) % totalPlayers;
+    state.turnIndex = skipped; // nextTurn() springt eroverheen
+    return;
+  }
+
+  // Reverse
+  if (card.type === "reverse") {
+    if (totalPlayers === 2) {
+      // bij 2 spelers werkt reverse als skip
+      const skipped = (state.turnIndex + step + totalPlayers) % totalPlayers;
+      state.turnIndex = skipped;
+    } else {
+      state.turnDir *= -1;
+    }
+    return;
+  }
+
+  // Wilds / wild4 worden elders afgehandeld
+}
+
+function applyCardEffect(card) {
+  if (gameConfig.mode === "local") {
+    applyLocalCardEffect(card);
+  } else {
+    applyAiCardEffect(card);
+  }
+}
+
+
+function endLocalTurn() {
+  // alleen relevant in local hotseat
+  if (gameConfig.mode !== "local") return;
+
+  state.localHandRevealed = false;
+
+  const total = state.localHands.length;
+  if (total === 0) {
+    render();
+    return;
+  }
+
+  const step = state.localDir || 1;
+
+  // volgende speler in huidige richting
+  state.localTurnIndex =
+    (state.localTurnIndex + step + total) % total;
+
+  const nextName =
+    state.localNames[state.localTurnIndex] ||
+    `Player ${state.localTurnIndex + 1}`;
+
+  setMessage(`${nextName}, het is jouw beurt.`);
+  render();
+}
+
 
 function setMessage(text) {
   state.message = text;
@@ -113,66 +241,46 @@ function canPlay(card, top) {
 }
 
 
-function applyCardEffect(card) {
-  const totalPlayers = 1 + state.opponents.length;
-  const step = state.turnDir; // +1 or -1
-
-  // +2 (Draw Two)
-  if (card.type === "draw2") {
-    // victim is next player in current direction
-    const victim = (state.turnIndex + step + totalPlayers) % totalPlayers;
-
-    if (victim === 0) {
-      state.player.push(drawCard(), drawCard());
-    } else {
-      state.opponents[victim - 1].push(drawCard(), drawCard());
-    }
-
-    // after punishing, put turnIndex on victim
-    // nextTurn() will advance past them
-    state.turnIndex = victim;
-    return;
-  }
-
-  // Skip
-  if (card.type === "skip") {
-    // skipped player
-    const skipped = (state.turnIndex + step + totalPlayers) % totalPlayers;
-
-    // put turnIndex on skipped; nextTurn() will hop over them
-    state.turnIndex = skipped;
-    return;
-  }
-
-  // Reverse
-  if (card.type === "reverse") {
-    if (totalPlayers === 2) {
-      // UNO rule: in 2-player game, reverse = skip
-      const skipped = (state.turnIndex + step + totalPlayers) % totalPlayers;
-      state.turnIndex = skipped;
-    } else {
-      // flip direction
-      state.turnDir *= -1;
-    }
-    return;
-  }
-
-  // Wild effects handled elsewhere
-}
-
 
 function startGame() {
   state.deck = makeDeck();
-  state.player = [];
-  state.opponents = [];
   state.discard = null;
-  state.turnIndex = 0;
-  state.turnDir = 1;     // reset direction each game
   state.gameOver = false;
 
-  // create AI hands based on config (default 1 if missing)
-  const aiCount = gameConfig?.mode === "ai" ? (gameConfig.aiCount || 1) : 1;
+  if (gameConfig.mode === "local") {
+    // 🔹 LOCAL HOTSEAT
+    const names =
+      gameConfig.localNames && gameConfig.localNames.length
+        ? gameConfig.localNames
+        : ["Player 1", "Player 2"];
 
+    state.localNames = names;
+    state.localHands = names.map(() => []);
+    state.localTurnIndex = 0;
+    state.localHandRevealed = false;
+    state.localDir = 1;
+
+    // kaarten delen
+    for (let i = 0; i < 7; i++) {
+      state.localHands.forEach((hand) => hand.push(drawCard()));
+    }
+
+    // eerste discard
+    state.discard = drawCard();
+
+    setMessage(`${names[0]}, het is jouw beurt.`);
+    render();
+    return;
+  }
+
+  // 🔹 VS AI (bestaande gedrag)
+  state.player = [];
+  state.opponents = [];
+  state.turnIndex = 0;
+  state.turnDir = 1;
+  state.aiThinking = false;
+
+  const aiCount = gameConfig?.mode === "ai" ? (gameConfig.aiCount || 1) : 1;
   for (let i = 0; i < aiCount; i++) state.opponents.push([]);
 
   // deal
@@ -181,12 +289,13 @@ function startGame() {
     state.opponents.forEach((hand) => hand.push(drawCard()));
   }
 
-  // first discard
+  // eerste discard
   state.discard = drawCard();
 
   setMessage("Your turn. Play a matching card or draw.");
   render();
 }
+
 
 
 function endGame(winner) {
@@ -258,23 +367,32 @@ function aiTakeTurn(aiIndex) {
       card.color = best;
       state.discard.color = best;
 
-      // +4 effect: volgende speler 4 kaarten
+      // +4 effect: volgende speler in huidige richting krijgt 4 kaarten
       if (card.type === "wild4") {
         const total = 1 + state.opponents.length;
-        const next = (state.turnIndex + 1) % total;
-        if (next === 0) {
-          state.player.push(drawCard(), drawCard(), drawCard(), drawCard());
+        const step = state.turnDir; // 1 of -1
+        const victim = (state.turnIndex + step + total) % total;
+
+        if (victim === 0) {
+          state.player.push(
+            drawCard(),
+            drawCard(),
+            drawCard(),
+            drawCard()
+          );
         } else {
-          state.opponents[next - 1].push(
+          state.opponents[victim - 1].push(
             drawCard(),
             drawCard(),
             drawCard(),
             drawCard()
           );
         }
-        // zet turnIndex op die 'gestrafte' speler, nextTurn() gaat daarna naar de volgende
-        state.turnIndex = next;
+
+        // beurtindex op de 'gestrafte' speler; nextTurn() gaat daarna verder
+        state.turnIndex = victim;
       }
+
     }
 
     setMessage(`AI ${aiIndex + 1} played a card.`);
@@ -311,11 +429,38 @@ document.querySelectorAll(".color-btn").forEach((btn) => {
     state.discard.color = chosen;
     chooseColorModal.classList.add("hidden");
 
-    // apply +4 draw
+    if (gameConfig.mode === "local") {
+      // 🔹 HOTSEAT: wild +4 straf in huidige richting
+      if (state.discard.type === "wild4") {
+        const total = state.localHands.length;
+        const step = state.localDir || 1;
+        const victim =
+          (state.localTurnIndex + step + total) % total;
+
+        state.localHands[victim].push(
+          drawCard(),
+          drawCard(),
+          drawCard(),
+          drawCard()
+        );
+
+        // beurtindex op gestrafte speler, endLocalTurn gaat daarna door
+        state.localTurnIndex = victim;
+      }
+
+      // wild zonder +4: alleen kleur veranderen, dan naar volgende
+      endLocalTurn();
+      return;
+    }
+
+    // 🔹 VS AI: bestaande logica, maar richting-afhankelijk
     if (state.discard.type === "wild4") {
       const total = 1 + state.opponents.length;
-      const next = (state.turnIndex + 1) % total;
-      if (next === 0) {
+      const step = state.turnDir;
+      const victim =
+        (state.turnIndex + step + total) % total;
+
+      if (victim === 0) {
         state.player.push(
           drawCard(),
           drawCard(),
@@ -323,20 +468,22 @@ document.querySelectorAll(".color-btn").forEach((btn) => {
           drawCard()
         );
       } else {
-        state.opponents[next - 1].push(
+        state.opponents[victim - 1].push(
           drawCard(),
           drawCard(),
           drawCard(),
           drawCard()
         );
       }
-      // zet turnIndex op 'gestrafte' speler, nextTurn() gaat daarna door
-      state.turnIndex = next;
+
+      state.turnIndex = victim;
     }
 
+    // in VS AI gaat het spel gewoon door naar volgende beurt
     nextTurn();
   });
 });
+
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -492,8 +639,185 @@ async function animateCardToDiscard(card) {
   );
 }
 
+function renderLocalHotseat() {
+  const msgEl = document.getElementById("message");
+  const deckCountEl = document.getElementById("deckCount");
+  const discardEl = document.getElementById("discard");
+  const oppWrap = document.getElementById("opponents");
+  const playerHandEl = document.getElementById("playerHand");
+  const drawBtn = document.getElementById("drawBtn");
+
+  const currentIndex = state.localTurnIndex;
+  const currentName =
+    state.localNames[currentIndex] || `Player ${currentIndex + 1}`;
+  const currentHand = state.localHands[currentIndex];
+
+  deckCountEl.textContent = `Cards left: ${state.deck.length}`;
+
+  // discard tonen
+  discardEl.innerHTML = "";
+  if (state.discard) {
+    discardEl.classList.remove("slot");
+    discardEl.appendChild(cardEl(state.discard));
+  } else {
+    discardEl.classList.add("slot");
+    discardEl.textContent = "—";
+  }
+
+  // andere spelers volledig verbergen
+// andere spelers: lijst met aantallen tonen
+oppWrap.innerHTML = "";
+
+const panel = document.createElement("div");
+panel.className = "hand-area";
+
+const titleEl = document.createElement("h2");
+titleEl.textContent = "Spelers";
+panel.appendChild(titleEl);
+
+const listEl = document.createElement("div");
+listEl.className = "player-list";
+
+state.localHands.forEach((hand, i) => {
+  const row = document.createElement("div");
+  row.className = "player-list-item";
+  if (i === currentIndex) {
+    row.classList.add("active-player");
+  }
+
+  const nameSpan = document.createElement("span");
+  nameSpan.textContent =
+    state.localNames[i] || `Player ${i + 1}`;
+
+  const countSpan = document.createElement("span");
+  countSpan.textContent = `${hand.length} kaarten`;
+
+  row.appendChild(nameSpan);
+  row.appendChild(countSpan);
+  listEl.appendChild(row);
+});
+
+panel.appendChild(listEl);
+oppWrap.appendChild(panel);
+  // speler-hand area leegmaken
+  playerHandEl.innerHTML = "";
+
+  if (state.gameOver) {
+    drawBtn.disabled = true;
+    msgEl.textContent = state.message;
+    return;
+  }
+
+
+
+
+document.getElementById("drawBtn").addEventListener("click", onDrawClicked);
+document.getElementById("drawBtn").addEventListener("click", () => {
+  if (gameConfig.mode === "local") {
+    hotseatOnDrawClicked();
+  } else {
+    onDrawClicked();
+  }
+});
+
+  function hotseatOnDrawClicked() {
+  if (state.gameOver) return;
+  if (!state.localHandRevealed) return;
+
+  const currentIndex = state.localTurnIndex;
+  const hand = state.localHands[currentIndex];
+
+  hand.push(drawCard());
+  setMessage("Je hebt een kaart gepakt.");
+
+  // in deze simpele variant eindigt je beurt na 1 kaart pakken
+  endLocalTurn();
+}
+
+
+function hotseatOnCardClicked(index) {
+  if (state.gameOver) return;
+  if (!state.localHandRevealed) return;
+
+  const currentIndex = state.localTurnIndex;
+  const hand = state.localHands[currentIndex];
+  const card = hand[index];
+
+  if (!canPlay(card, state.discard)) {
+    setMessage("Die kaart past nu nog niet.");
+    render();
+    return;
+  }
+
+  // kaart spelen
+  hand.splice(index, 1);
+  state.discard = card;
+  animateCardToDiscard(card);
+
+  // gewonnen?
+  if (hand.length === 0) {
+    const name =
+      state.localNames[currentIndex] || `Player ${currentIndex + 1}`;
+    state.gameOver = true;
+    setMessage(`${name} heeft gewonnen!`);
+    render();
+    return;
+  }
+
+  // 🔹 Wild / +4 → eerst kleur kiezen via modal
+  if (card.type === "wild" || card.type === "wild4") {
+    chooseColorModal.classList.remove("hidden");
+    return;
+  }
+
+  // 🔹 andere specials (+2 / Skip / Reverse)
+  applyCardEffect(card);
+
+  // beurt doorgeven aan volgende speler
+  endLocalTurn();
+}
+
+
+  // ✳️ Hand NOG NIET onthuld → alleen grote knop tonen
+  if (!state.localHandRevealed) {
+    const btn = document.createElement("button");
+    btn.className = "btn primary";
+    btn.textContent = `${currentName}, klik hier om je kaarten te zien`;
+    btn.addEventListener("click", () => {
+      if (state.gameOver) return;
+      state.localHandRevealed = true;
+      setMessage(`${currentName}, je bent aan de beurt.`);
+      render();
+    });
+    playerHandEl.appendChild(btn);
+
+    drawBtn.disabled = true;
+    msgEl.textContent = `${currentName}, het is jouw beurt.`;
+    return;
+  }
+
+  // ✳️ Hand WEL onthuld → kaarten tonen
+  currentHand.forEach((c, i) => {
+    playerHandEl.appendChild(
+      cardEl(c, {
+        clickable: !state.gameOver,
+        onClick: () => hotseatOnCardClicked(i),
+      })
+    );
+  });
+
+  // in hotseat mag je nu 1 kaart spelen of 1 kaart pakken
+  drawBtn.disabled = state.gameOver;
+  msgEl.textContent = state.message || `${currentName}, kies een kaart of pak een kaart.`;
+}
+
 
 function render() {
+    if (gameConfig.mode === "local") {
+    renderLocalHotseat();
+    return;
+  }
+
   document.getElementById("message").textContent = state.message;
   document.getElementById("deckCount").textContent = `Cards left: ${state.deck.length}`;
 
@@ -570,29 +894,82 @@ drawBtn.disabled = state.turnIndex !== 0 || state.gameOver || state.aiThinking;
 
 document.getElementById("drawBtn").addEventListener("click", onDrawClicked);
 
+function updateLocalNameFields() {
+  const count = Number(localCountSelect.value) || 2;
+  localNamesContainer.innerHTML = "";
+
+  for (let i = 0; i < count; i++) {
+    const row = document.createElement("div");
+    row.className = "name-row";
+
+    const label = document.createElement("label");
+    label.textContent = `Player ${i + 1} name`;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "name-input";
+    input.placeholder = `Player ${i + 1}`;
+    input.value = `Player ${i + 1}`;
+
+    row.appendChild(label);
+    row.appendChild(input);
+    localNamesContainer.appendChild(row);
+  }
+}
 // boot
 const startModal = document.getElementById("startModal");
 const aiOptions = document.getElementById("aiOptions");
+const localOptions = document.getElementById("localOptions");
+const localCountSelect = document.getElementById("localCount");
+const localNamesContainer = document.getElementById("localNames");
 
-// Hide AI options if Local is selected
 document.querySelectorAll('input[name="mode"]').forEach((radio) => {
   radio.addEventListener("change", () => {
     const mode = document.querySelector('input[name="mode"]:checked').value;
-    aiOptions.style.display = mode === "ai" ? "flex" : "none";
+
+    if (mode === "ai") {
+      aiOptions.style.display = "flex";
+      localOptions.style.display = "none";
+    } else {
+      aiOptions.style.display = "none";
+      localOptions.style.display = "block";
+      updateLocalNameFields();
+    }
   });
 });
 
+localCountSelect.addEventListener("change", () => {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  if (mode === "local") {
+    updateLocalNameFields();
+  }
+});
 document.getElementById("startBtn").addEventListener("click", () => {
   const mode = document.querySelector('input[name="mode"]:checked').value;
-  const aiCount = Number(document.getElementById("aiCount").value);
-
   gameConfig.mode = mode;
-  gameConfig.aiCount = aiCount;
 
-  // one-time: hide modal and start
+  if (mode === "ai") {
+    const aiCount = Number(document.getElementById("aiCount").value);
+    gameConfig.aiCount = aiCount;
+    gameConfig.localNames = [];
+  } else {
+    const count = Number(localCountSelect.value) || 2;
+    const inputs = localNamesContainer.querySelectorAll("input.name-input");
+    const names = [];
+
+    inputs.forEach((input, i) => {
+      const val = input.value.trim();
+      names.push(val || `Player ${i + 1}`);
+    });
+
+    gameConfig.localNames = names;
+    // voor nu laten we aiCount gewoon op 1; hotseat-logica komt in de volgende stap
+  }
+
   startModal.classList.add("hidden");
   startGame();
 });
+
 
 // On load: show modal, don't start game yet
 setMessage("Choose settings to begin.");

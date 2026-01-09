@@ -14,6 +14,48 @@
   display: grid;
   gap: 14px;
 }
+.names-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
+}
+.player-list {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.player-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.player-list-item.active-player {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.name-row label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.name-input {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+}
 
 .color-row {
   display: flex;
